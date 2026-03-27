@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+  <!--
+    IMPORTANT: MCP protocol communicates via STDOUT.
+    ALL logging MUST go to STDERR or file — never STDOUT.
+
+    Log file location: relative to working directory = EXE installation folder.
+    jpackage sets working dir to installation dir, so logs land at:
+      Windows: <install-dir>\logs\mainframe-architect-mcp.log
+  -->
+
+  <!-- STDERR — za Claude Desktop da hvata u realnom vremenu -->
+  <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+    <target>System.err</target>
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!--
+    FILE — logs u install root folderu (d:\MainframeArchitectMCP\logs\).
+    EXE: mamp.log.dir = $APPDIR/../logs (setuje jpackage JVM arg u pom.xml)
+         -> d:\MainframeArchitectMCP\app\..\logs = d:\MainframeArchitectMCP\logs\
+    JAR: mamp.log.dir nije setovan, fallback = ./logs (relativan od terminala)
+  -->
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${mamp.log.dir:-logs}/mainframe-architect-mcp.log</file>
+    <immediateFlush>true</immediateFlush>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${mamp.log.dir:-logs}/mainframe-architect-mcp.%d{yyyy-MM-dd}.log</fileNamePattern>
+      <maxHistory>7</maxHistory>
+      <totalSizeCap>50MB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="STDERR"/>
+    <appender-ref ref="FILE"/>
+  </root>
+
+  <!-- Reduce noise from ANTLR/proleap -->
+  <logger name="org.antlr" level="WARN"/>
+  <logger name="io.github.uwol" level="WARN"/>
+
+</configuration>

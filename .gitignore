@@ -1,0 +1,28 @@
+# Build output
+target/
+build/
+
+# Enterprise module — commercial, not open source
+mainframe-architect-mcp-enterprise/
+
+# Internal planning docs
+MAINFRAME_ARCHITECT_MCP_PLAN.md
+
+# IDE
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Maven error artifact
+[Help
+
+# Logs (local only)
+logs/
+*.log

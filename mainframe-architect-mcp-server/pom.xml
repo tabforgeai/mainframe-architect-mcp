@@ -1,0 +1,465 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>ai.tabforge</groupId>
+    <artifactId>Mainframe-Architect-MCP</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>mainframe-architect-mcp-server</artifactId>
+  <name>Mainframe Architect MCP — Server</name>
+  <description>MCP server with Community Edition tools (Tools 1-6)</description>
+
+  <properties>
+    <main.class>ai.tabforge.mainframe.Main</main.class>
+  </properties>
+
+  <dependencies>
+
+    <!-- Core parsing engine -->
+    <dependency>
+      <groupId>ai.tabforge</groupId>
+      <artifactId>mainframe-architect-mcp-core</artifactId>
+    </dependency>
+
+    <!-- MCP Java SDK -->
+    <dependency>
+      <groupId>io.modelcontextprotocol.sdk</groupId>
+      <artifactId>mcp</artifactId>
+    </dependency>
+
+    <!-- Jackson 2 za nas kod -->
+    <!--
+      jackson-databind 2.19.2 je obavezan jer tools.jackson.core:jackson-databind:3.0.3
+      (koji koristi MCP SDK) je kompajliran uz jackson-annotations 2.19.2+,
+      koja dodaje JsonFormat.Shape.POJO enum konstantu. Starije verzije ne rade.
+    -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <!-- Logging — Logback kao runtime impl (STDERR only) -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+    </dependency>
+
+    <!-- Test -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <!--
+      finalName bez verzije čuva stabilan naziv JAR-a između verzija,
+      što pojednostavljuje installer profile — svaki profil referencira
+      JAR po imenu, a ne po verziji.
+    -->
+    <finalName>mainframe-architect-mcp</finalName>
+
+    <plugins>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <compilerArgs>
+            <arg>-parameters</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <!-- Fat JAR za distribuciju -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>${main.class}</mainClass>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+    </plugins>
+  </build>
+
+  <profiles>
+
+    <!--
+      ══════════════════════════════════════════════════════════════════
+      NATIVE INSTALLER PROFILES
+      ══════════════════════════════════════════════════════════════════
+
+      Svaki profil pravi self-contained native installer koji uključuje
+      stripped-down JRE (via jlink unutar jpackage).
+      Korisnik NE mora imati Javu instaliranu na svom sistemu.
+
+      BUILD KOMANDE:
+        Windows EXE  (pokreni na Windows):
+          JAVA_HOME="c:/Java_21" mvn clean package -P windows-exe -DskipTests -pl mainframe-architect-mcp-server -am
+
+        Linux DEB  (pokreni na Ubuntu/Debian):
+          mvn clean package -P linux-deb -DskipTests -pl mainframe-architect-mcp-server -am
+
+        Linux RPM  (pokreni na RHEL/Rocky/Fedora — zahteva rpmbuild):
+          mvn clean package -P linux-rpm -DskipTests -pl mainframe-architect-mcp-server -am
+
+        macOS: koristi fat JAR direktno (nema native instalera)
+          java -jar mainframe-architect-mcp.jar [source-root] /repo/cobol
+
+      OUTPUT:  mainframe-architect-mcp-server/target/jpackage/
+
+      NAKON INSTALACIJE — Claude Desktop / Cursor MCP konfiguracija (Windows):
+        {
+          "mcpServers": {
+            "mainframe-architect": {
+              "command": "C:\\Program Files\\MainframeArchitectMCP\\MainframeArchitectMCP.exe",
+              "args": ["[source-root]", "C:\\repos\\mainframe-cobol"]
+            }
+          }
+        }
+
+      NAPOMENA O winConsole:
+        winConsole=true je OBAVEZAN za MCP servere na Windows.
+        Bez njega, Windows pravi GUI-subsystem executable koji ne inicijalizuje
+        STDIN/STDOUT ispravno, što kvari stdio MCP protokol koji Claude Desktop koristi.
+
+      KAKO RADI:
+        1. maven-antrun-plugin (package faza, posle maven-shade-plugin):
+           Pravi target/installer-input/ sa fat JAR-om
+        2. jpackage-maven-plugin (package faza, posle antrun):
+           Koristi target/installer-input/ za izgradnju platform instalera.
+           jpackage interno poziva jlink za minimalni JRE sa samo potrebnim modulima.
+    -->
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Windows EXE installer (pokreni na Windows)
+         ════════════════════════════════════════════════════════════ -->
+    <profile>
+      <id>windows-exe</id>
+      <build>
+        <plugins>
+
+          <!-- Korak 1: Pripremi installer-input direktorijum sa fat JAR-om -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>prepare-installer-input-windows</id>
+                <phase>package</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <mkdir dir="${project.build.directory}/installer-input"/>
+                    <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                          todir="${project.build.directory}/installer-input"
+                          overwrite="true"/>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <!-- Korak 2: Build Windows EXE sa bundled JRE -->
+          <plugin>
+            <groupId>org.panteleyev</groupId>
+            <artifactId>jpackage-maven-plugin</artifactId>
+            <version>1.7.2</version>
+            <executions>
+              <execution>
+                <id>package-windows-exe</id>
+                <phase>package</phase>
+                <goals><goal>jpackage</goal></goals>
+                <configuration>
+                  <name>MainframeArchitectMCP</name>
+                  <vendor>TabForge AI</vendor>
+                  <appVersion>1.0.0</appVersion>
+                  <description>MCP server for AI-assisted COBOL/JCL/CICS codebase analysis</description>
+                  <input>${project.build.directory}/installer-input</input>
+                  <mainJar>${project.build.finalName}.jar</mainJar>
+                  <mainClass>${main.class}</mainClass>
+                  <destination>${project.build.directory}/jpackage</destination>
+                  <type>EXE</type>
+
+                  <!--
+                    winConsole=true: OBAVEZAN za stdio MCP protokol.
+                    Pravi console-subsystem executable da STDIN/STDOUT
+                    budu ispravno inicijalizovani na Windows.
+                  -->
+                  <winConsole>true</winConsole>
+
+                  <!--
+                    Nema shortcut/menu: ovo je background servis koji pokreće
+                    Claude Desktop, ne user-facing desktop aplikacija.
+                  -->
+                  <winShortcut>false</winShortcut>
+                  <winMenu>false</winMenu>
+
+                  <!--
+                    Per-machine install (Program Files) — putanja je stabilna
+                    i predvidiva u Claude Desktop konfiguraciji.
+                  -->
+                  <winPerUserInstall>false</winPerUserInstall>
+                  <winDirChooser>true</winDirChooser>
+
+                  <!--
+                    Unique upgrade UUID — identifikuje ovaj product Windows Installer-u
+                    da upgrades zamenjuju postojeću instalaciju umesto da dodaju drugu kopiju.
+                  -->
+                  <winUpgradeUuid>b7e2f419-93a1-4c8d-ae5b-1f84d2c0e763</winUpgradeUuid>
+
+                  <!--
+                    JVM opcije:
+                    - Xmx1g: dovoljan heap za velike COBOL repozitorijume (1000+ programa)
+                    - mamp.log.dir: $APPDIR je install/app/ folder koji jpackage setuje —
+                      ../logs ide na install root (d:\MainframeArchitectMCP\logs\)
+                  -->
+                  <javaOptions>
+                    <option>-Xms64m</option>
+                    <option>-Xmx1g</option>
+                    <option>-Dfile.encoding=UTF-8</option>
+                    <option>-Djava.net.preferIPv4Stack=true</option>
+                    <option>-Dmamp.log.dir=$APPDIR/../logs</option>
+                  </javaOptions>
+
+                  <verbose>true</verbose>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Linux DEB installer — Ubuntu / Debian
+         (pokreni na Ubuntu sa dpkg-deb)
+         ════════════════════════════════════════════════════════════ -->
+    <profile>
+      <id>linux-deb</id>
+      <build>
+        <plugins>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>prepare-installer-input-linux-deb</id>
+                <phase>package</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <mkdir dir="${project.build.directory}/installer-input"/>
+                    <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                          todir="${project.build.directory}/installer-input"
+                          overwrite="true"/>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.panteleyev</groupId>
+            <artifactId>jpackage-maven-plugin</artifactId>
+            <version>1.7.2</version>
+            <executions>
+              <execution>
+                <id>package-linux-deb</id>
+                <phase>package</phase>
+                <goals><goal>jpackage</goal></goals>
+                <configuration>
+                  <name>mainframe-architect-mcp</name>
+                  <vendor>TabForge AI</vendor>
+                  <appVersion>1.0.0</appVersion>
+                  <description>MCP server for AI-assisted COBOL/JCL/CICS codebase analysis</description>
+                  <input>${project.build.directory}/installer-input</input>
+                  <mainJar>${project.build.finalName}.jar</mainJar>
+                  <mainClass>${main.class}</mainClass>
+                  <destination>${project.build.directory}/jpackage</destination>
+                  <type>DEB</type>
+                  <linuxPackageName>mainframe-architect-mcp</linuxPackageName>
+                  <linuxAppCategory>misc</linuxAppCategory>
+
+                  <!--
+                    Eksplicitno navedeni Java moduli koje server koristi.
+                    Sprečava jpackage da uključi java.desktop (AWT/Swing),
+                    koji bi inače uvukao X11, ALSA i druge GUI biblioteke
+                    kao DEB zavisnosti — potpuno nepotrebno za stdio server.
+
+                    Moduli:
+                      java.base         – uvek potreban
+                      java.logging      – java.util.logging (SLF4J bridge)
+                      java.xml          – XML parsiranje (logback, Jackson)
+                      java.management   – JMX (Reactor internals)
+                      jdk.crypto.ec     – TLS elliptic curve
+                      jdk.crypto.cryptoki – PKCS11 provider
+                      jdk.unsupported   – sun.misc.Unsafe (Reactor/Netty internals)
+                  -->
+                  <addModules>
+                    <addModule>java.base</addModule>
+                    <addModule>java.logging</addModule>
+                    <addModule>java.naming</addModule>
+                    <addModule>java.xml</addModule>
+                    <addModule>java.management</addModule>
+                    <addModule>jdk.crypto.ec</addModule>
+                    <addModule>jdk.crypto.cryptoki</addModule>
+                    <addModule>jdk.unsupported</addModule>
+                  </addModules>
+
+                  <!-- jlink: smanjuje veličinu bundled JRE -->
+                  <jlinkOptions>
+                    <jlinkOption>--strip-debug</jlinkOption>
+                    <jlinkOption>--no-header-files</jlinkOption>
+                    <jlinkOption>--no-man-pages</jlinkOption>
+                    <jlinkOption>--compress=zip-6</jlinkOption>
+                  </jlinkOptions>
+
+                  <javaOptions>
+                    <option>-Xms64m</option>
+                    <option>-Xmx1g</option>
+                    <option>-Dfile.encoding=UTF-8</option>
+                    <option>-Djava.net.preferIPv4Stack=true</option>
+                  </javaOptions>
+
+                  <verbose>true</verbose>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Linux RPM installer — RHEL / Rocky Linux / Fedora
+         (pokreni na RHEL-family sistemu: sudo dnf install rpm-build)
+         ════════════════════════════════════════════════════════════ -->
+    <profile>
+      <id>linux-rpm</id>
+      <build>
+        <plugins>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>prepare-installer-input-linux-rpm</id>
+                <phase>package</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <mkdir dir="${project.build.directory}/installer-input"/>
+                    <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                          todir="${project.build.directory}/installer-input"
+                          overwrite="true"/>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.panteleyev</groupId>
+            <artifactId>jpackage-maven-plugin</artifactId>
+            <version>1.7.2</version>
+            <executions>
+              <execution>
+                <id>package-linux-rpm</id>
+                <phase>package</phase>
+                <goals><goal>jpackage</goal></goals>
+                <configuration>
+                  <name>mainframe-architect-mcp</name>
+                  <vendor>TabForge AI</vendor>
+                  <appVersion>1.0.0</appVersion>
+                  <description>MCP server for AI-assisted COBOL/JCL/CICS codebase analysis</description>
+                  <input>${project.build.directory}/installer-input</input>
+                  <mainJar>${project.build.finalName}.jar</mainJar>
+                  <mainClass>${main.class}</mainClass>
+                  <destination>${project.build.directory}/jpackage</destination>
+                  <type>RPM</type>
+                  <linuxPackageName>mainframe-architect-mcp</linuxPackageName>
+                  <linuxAppCategory>misc</linuxAppCategory>
+
+                  <!-- Isti set modula kao linux-deb — isključuje java.desktop i X11/ALSA -->
+                  <addModules>
+                    <addModule>java.base</addModule>
+                    <addModule>java.logging</addModule>
+                    <addModule>java.naming</addModule>
+                    <addModule>java.xml</addModule>
+                    <addModule>java.management</addModule>
+                    <addModule>jdk.crypto.ec</addModule>
+                    <addModule>jdk.crypto.cryptoki</addModule>
+                    <addModule>jdk.unsupported</addModule>
+                  </addModules>
+
+                  <jlinkOptions>
+                    <jlinkOption>--strip-debug</jlinkOption>
+                    <jlinkOption>--no-header-files</jlinkOption>
+                    <jlinkOption>--no-man-pages</jlinkOption>
+                    <jlinkOption>--compress=zip-6</jlinkOption>
+                  </jlinkOptions>
+
+                  <javaOptions>
+                    <option>-Xms64m</option>
+                    <option>-Xmx1g</option>
+                    <option>-Dfile.encoding=UTF-8</option>
+                    <option>-Djava.net.preferIPv4Stack=true</option>
+                  </javaOptions>
+
+                  <verbose>true</verbose>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+        </plugins>
+      </build>
+    </profile>
+
+  </profiles>
+
+</project>
