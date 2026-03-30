@@ -39,9 +39,11 @@ And get structured, accurate answers — backed by static analysis of your actua
 
 ## Requirements
 
-- Java 21 or later
 - Claude Desktop (or any MCP-compatible client)
 - Your COBOL source files in a local directory (`.cbl`/`.cob`, `.cpy`, `.jcl`, `.csd`/`.rdo`)
+- **No Java installation needed** — native installers include a bundled Java 21 runtime
+
+> Only needed if running the JAR directly (Option B): Java 21 or later
 
 ---
 
