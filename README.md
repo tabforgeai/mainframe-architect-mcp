@@ -49,6 +49,8 @@ And get structured, accurate answers — backed by static analysis of your actua
 
 ### Option A: Native installer (recommended)
 
+> Prefer to build from source? See [docs/build-from-source.md](docs/build-from-source.md) — requires only Docker (Linux) or JDK 21 + Maven (Windows).
+
 **Windows:**
 1. Download `MainframeArchitectMCP-1.0.0.exe` from [Releases](../../releases)
 2. Run the installer — installs to `C:\Program Files\MainframeArchitectMCP\` (bundled Java 21, no separate install needed)
