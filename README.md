@@ -6,6 +6,10 @@ Mainframe Architect MCP is a [Model Context Protocol](https://modelcontextprotoc
 
 No live mainframe connection. No IBM license. No cloud upload. Your code stays on your machine.
 
+## Demo
+
+[![Mainframe Architect MCP Demo](https://img.youtube.com/vi/3Vf09TidUTE/maxresdefault.jpg)](https://youtu.be/3Vf09TidUTE)
+
 ---
 
 ## What it does
