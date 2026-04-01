@@ -8,7 +8,9 @@ No live mainframe connection. No IBM license. No cloud upload. Your code stays o
 
 ## Demo
 
-[![Mainframe Architect MCP Demo](https://img.youtube.com/vi/3Vf09TidUTE/maxresdefault.jpg)](https://youtu.be/3Vf09TidUTE)
+[<img src="https://img.youtube.com/vi/3Vf09TidUTE/maxresdefault.jpg" width="600" alt="Mainframe Architect MCP Demo">](https://youtu.be/3Vf09TidUTE)
+
+Analyzed codebase: [AWS CardDemo](https://github.com/aws-samples/aws-mainframe-modernization-carddemo) — an open-source enterprise COBOL/CICS/JCL credit card management application (31 programs, 30 copybooks, 38 JCL jobs, 25 CICS transactions).
 
 ---
 
